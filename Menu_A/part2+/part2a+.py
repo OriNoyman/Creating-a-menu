@@ -8,27 +8,26 @@ class Menu(ABC):
     def execute(self):
         pass
     
-class MenuAction(Menu):
+class OptionOne(Menu):
     def __init__(self):
-        super().__init__("Action in the site")
+        super().__init__("Option one")
 
     def execute(self):
-        print("the action in the progress")
+        print("option one")
 
-class AnotherMenu(Menu):
+class OptionTwo(Menu):
     def __init__(self):
-        super().__init__("Another menu")
+        super().__init__("Some other option")
 
     def execute(self):
-        print("Opening another mute")
+        print("Some other option")
 
-class Exit(Menu):
+class OptionTree(Menu):
     def __init__(self):
-        super().__init__("Exit")
+        super().__init__("Good option")
 
     def execute(self):
-        print("Exiting the menu")
-        exit()
+        print("Option tree")
 
 class MenuItem:
     def __init__(self):
@@ -56,9 +55,9 @@ class MenuItem:
 
 def main():
     menu = MenuItem()
-    menu.add_item(MenuAction())
-    menu.add_item(AnotherMenu())
-    menu.add_item(Exit()) 
+    menu.add_item(OptionOne())
+    menu.add_item(OptionTwo())
+    menu.add_item(OptionTree()) 
     menu.run()
 
 if __name__ == "__main__":
