@@ -8,27 +8,19 @@ class Menu(ABC):
     def execute(self):
         pass
 
-class MenuAction(Menu):
+class OptionOne(Menu):
     def __init__(self):
-        super().__init__("Action in the site")
+        super().__init__("Option One")
 
     def execute(self):
-        print("the action in the progress")
+        print("Empty Option")
 
-class AnotherMenu(Menu):
+class OptionTwo(Menu):
     def __init__(self):
-        super().__init__("Another menu")
+        super().__init__("Use This Option")
 
     def execute(self):
-        print("Opening another mute")
-
-class Exit(Menu):
-    def __init__(self):
-        super().__init__("Exit")
-
-    def execute(self):
-        print("Exiting the menu")
-        exit()
+        print("Good Option")
 
 class MenuItem:
     def __init__(self):
@@ -38,24 +30,24 @@ class MenuItem:
         self.items.append(item)
     
     def show_options(self):
-        print("-- Main Menu --")
+        print("-- Free text menu --")
         for item in self.items:
             print(item.name)
     
     def free_text_menu(self):
         while True:
             self.show_options()
-            choice = input("please choose a option: ")
+            choice = input("Choose from the following option: ")
             for item in self.items:
                if choice == item.name:
                   item.execute()     
             else:
                 print("invalid option")
+                
 def main():
     menu = MenuItem()
-    menu.add_item(MenuAction())
-    menu.add_item(AnotherMenu())
-    menu.add_item(Exit()) 
+    menu.add_item(OptionOne())
+    menu.add_item(OptionTwo()) 
     menu.free_text_menu()
 
 if __name__ == "__main__":
