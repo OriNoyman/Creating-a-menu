@@ -16,7 +16,7 @@ class Menu(Base):
     items = relationship('MenuItem', back_populates='menu')
 
     users = relationship('User', secondary='user_menu', back_populates='menus')
-    actions = relationship('MenuAction', secondary="menu_to_action", back_populates='menus')
+    actions = relationship('MenuAction', secondary="menu_action_link", back_populates='menus')
 
 class MenuItem(Base):
     __tablename__ = 'menu_items'
