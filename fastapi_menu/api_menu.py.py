@@ -1,153 +1,218 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Depends, HTTPException
+from sqlalchemy.orm import declarative_base, Session
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from pydantic import BaseModel
-from typing import List, Union, Optional
+from typing import List, Optional
+
+from table_definition import Base, Menu, MenuItem, MenuOption, User, MenuAction
+
+SQLALCHEMY_DATABASE_URL = 'mssql+pyodbc://sa:OriDbMenu123@localhost:1433/TableDefinition?driver=ODBC+Driver+17+for+SQL+Server'
+engine = create_engine(SQLALCHEMY_DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-class SubOption(BaseModel):
-    name: str
-    description: Optional[str] = None
-    action: str
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-class Option(BaseModel):
-    name: str
-    description: Optional[str] = None
-    action: Union[str, List[SubOption]]
-
-class Menu(BaseModel):
+class MenuValidation(BaseModel):
     id: int
     name: str
-    options: List[Option] = []
-
-menu = Menu(
-    id=1,
-    name="Main Menu",
-    options=[]
-)
-
-class User(BaseModel):
-    username: str
-    password: str
-
-users = []    
-
-@app.get("/menu")
-def get_menu():
-    return menu
-
-@app.post("/menu")
-def create_menu(new_menu: Menu):
-    global menu
-    menu = new_menu
-    return {"message": "Menu created successfully", "menu": menu}
-
-@app.post("/menu/option")
-def create_option(option: Option):
-    if not menu.options:
-        menu.options = []
-    menu.options.append(option)
-    return {"message": "Option created successfully", "menu": menu}
-
-@app.put("/menu/option/{option_name}")
-def update_option(option_name: str, updated_option: Option):
-    for i, option in enumerate(menu.options):
-        if option.name == option_name:
-            menu.options[i] = updated_option
-            return {"message": "Option updated successfully", "menu": menu}
-    raise HTTPException(status_code=404, detail=f"Option '{option_name}' not found")
-
-@app.delete("/menu")
-def delete_menu():
-    global menu
-    menu = Menu(id=0, name="", options=[])
-    return {"message": "Menu deleted successfully"}
-
-@app.post("/signup")
-def register_user(user: User):
-    return sign_up(user)
-
-@app.post("/menu/action/{option_name}")
-def execute_action(option_name: str, sub_option_name: Optional[str] = None):
-    for option in menu.options:
-        if option.name == option_name:
-            if isinstance(option.action, list):
-                if sub_option_name:
-                    for sub_option in option.action:
-                        if sub_option.name == sub_option_name:
-                            if sub_option.action in actions:
-                                result = actions[sub_option.action]()
-                                return {"message": f"Sub-option '{sub_option_name}' executed successfully", "result": result}
-                    raise HTTPException(status_code=404, detail=f"Sub-option '{sub_option_name}' not found")
-                return {"message": "Submenu found. Please choose a sub-option.", "submenu": option.action}
-            elif isinstance(option.action, str):
-                if option.action in actions:
-                    result = actions[option.action]()
-                    return {"message": f"Action '{option_name}' executed successfully", "result": result}
-                else:
-                    raise HTTPException(status_code=400, detail=f"Action '{option.action}' not found")
+    parent_menu_id: Optional[int] = None
     
-    raise HTTPException(status_code=404, detail=f"Option '{option_name}' not found")
+class MenuItemValidation(BaseModel):
+    id: int
+    name: str
+    menu_id: int
 
-def sign_up(user: User):
-    for existing_user in users:
-        if existing_user.username == user.username:
-            raise HTTPException(status_code=400, detail="Username already exists")
-        
-    users.append(user)
-    return {"message": "User registered successfully", "user": user}
+class MenuOptionValidation(BaseModel):
+    id: int
+    menu_id: int
+    action_id: Optional[int] = None
 
-def menu_action():
-    print("Performs an action")
+class MenuActionValidation(BaseModel):
+    id: int
+    action_name: str
+    description: Optional[str]
 
-def exit_menu():
-    print("Exiting the site")
+class UserValidation(BaseModel):
+    username: str
+    password: str    
 
-def return_to_main_menu():
-    global menu
-    return {"message": "Returned to the main menu successfully", "menu": menu}
+@app.post("/menus/")
+def create_menu(menu: MenuValidation, db: Session = Depends(get_db)):
+    db_menu = Menu(name=menu.name)
+    if menu.parent_menu_id:
+        parent_menu = db.query(Menu).filter(Menu.id == menu.parent_menu_id).first()
+        if not parent_menu:
+            raise HTTPException(status_code=404, detail="Parent menu not found")
+        db_menu.parent_menu = parent_menu
+    db.add(db_menu)
+    db.commit()
+    db.refresh(db_menu)
+    return db_menu
 
-menu.options.append(
-    Option(
-        name="Login to the site",
-        description="User login action",
-        action="sign_up"
-    )
-)
+@app.post("/menu_items/")
+def create_menu_item(menu_item: MenuItemValidation, db: Session = Depends(get_db)):
+    db_menu_item = MenuItem(name=menu_item.name, menu_id=menu_item.menu_id)
+    db.add(db_menu_item)
+    db.commit()
+    db.refresh(db_menu_item)
+    return db_menu_item
 
-menu.options.append(
-    Option(
-        name="Action in the site",
-        description="Performs an action",
-        action="menu_action"
-    )
-)
+@app.post("/menu_options/")
+def create_option(menu_option: MenuOptionValidation, db: Session = Depends(get_db)):
+    db_menu_option = MenuOption(menu_id=menu_option.menu_id, action_id=menu_option.action_id)
+    db.add(db_menu_option)
+    db.commit()
+    db.refresh(db_menu_option)
+    return db_menu_option
 
-submenu_options = [
-    SubOption(name="option one", description="Performs an action", action="menu_action"),
-    SubOption(name="option two", description="Performs another action", action="menu_action"),
-    SubOption(name="Return to the main menu", description="An action that returns to the main menu", action="return_to_main_menu"),
-    SubOption(name="Exit", description="Exit the site", action="exit_menu")
-]
+@app.put("/menu_options/{option_id}")
+def update_option(option_id: int, updated_option: MenuOptionValidation, db: Session = Depends(get_db)):
+    db_update_option = db.query(MenuOption).filter(MenuOption.id == option_id).first()
+    if not db_update_option:
+        raise HTTPException(status_code=404, detail="MenuOption not found")
+    db_update_option.menu_id = updated_option.menu_id
+    db_update_option.action_id = updated_option.action_id
+    db.commit()
+    db.refresh(db_update_option)
+    return db_update_option
 
-menu.options.append(
-    Option(
-        name="Another menu",
-        description="Opening another menu",
-        action=submenu_options
-    )
-)
+@app.post("/menu_actions/")
+def create_action(menu_action: MenuActionValidation, db: Session = Depends(get_db)):
+    db_menu_action = MenuAction(action_name=menu_action.action_name, description=menu_action.description)
+    db.add(db_menu_action)
+    db.commit()
+    db.refresh(db_menu_action)
+    return db_menu_action
 
-menu.options.append(
-    Option(
-        name="Exit",
-        description="Exit the site",
-        action="exit_menu"
-    )
-)
+@app.delete("/menus/{menu_id}")
+def delete_menu(menu_id: int, db: Session = Depends(get_db)):
+    menu_to_delete = db.query(Menu).filter(Menu.id == menu_id).first()
+    if menu_to_delete is None:
+        raise HTTPException(status_code=404, detail="Menu not found")
+    db.delete(menu_to_delete)
+    db.commit()
+    return menu_to_delete
 
-actions = {
-    "sign_up": sign_up,  
-    "menu_action": menu_action,
-    "exit_menu": exit_menu, 
-    "return_to_main_menu": return_to_main_menu
+@app.post("/users/")
+def sign_up_user(user: UserValidation, db: Session = Depends(get_db)):
+    existing_user = db.query(User).filter(User.username == user.username).first()
+    if existing_user:
+        if existing_user.password != user.password:
+           raise HTTPException(status_code=404, detail="Invalid username or password")
+        return {"message": f"Login successful. Welcome, {existing_user.username}!"}
+    else:
+        if not user.username or not user.password:
+            raise HTTPException(status_code=404, detail="Username and password are required for registration")       
+    db_user = User(username=user.username, password=user.password)
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+    
+POST /menu_actions/
+{
+    "id": 1,
+    "action_name": "Action",
+    "description": "action in the main menu"
 }
+
+@app.post("/menu_options/perform/{option_id}")
+def perform_menu_option(option_id: int, db: Session = Depends(get_db)):
+    option = db.query(MenuOption).filter(MenuOption.id == option_id).first()
+    if not option:
+        raise HTTPException(status_code=404, detail="Menu option not found")
+    action = db.query(MenuAction).filter(MenuAction.id == option.action_id).first()
+    if not action:
+        raise HTTPException(status_code=404, detail="Action not found")
+    return {"message": f"Action '{action.action_name}' performed successfully!"}
+
+POST /menu_actions/
+
+{
+    "id": 1,
+    "action_name": "Exit",
+    "description": "Exit the system"
+}
+
+@app.post("/menu_options/perform/{option_id}")
+def perform_menu_option(option_id: int, db: Session = Depends(get_db)):
+    option = db.query(MenuOption).filter(MenuOption.id == option_id).first()
+    if not option:
+        raise HTTPException(status_code=404, detail="Menu option not found")
+    action = db.query(MenuAction).filter(MenuAction.id == option.action_id).first()
+    if not action:
+        raise HTTPException(status_code=404, detail="Action not found")
+    if action.action_name.lower() == "exit":
+        return {"message": "Exiting the system. Goodbye!"}
+    return {"message": f"Action '{action.action_name}' performed successfully!"}
+
+POST /menus/
+
+{
+    "name": "Sub Menu",
+    "parent_menu_id": 1 
+}
+
+
+action_routes = {
+    "sign_up": "/users/",
+    "exit": "/menu-actions/",
+    "sub_menu": "/menus/"
+}
+
+submenu_options = {
+    "Back to the main menu": "/menu/{menu_id}",
+    "perform_action": "/menu-options/perform/{option_id}"
+}
+
+@app.put("/menus/{menu_id}/add_options")
+def add_menu_options(menu_id: int, db: Session = Depends(get_db)):
+    db_menu = db.query(Menu).filter(Menu.id == menu_id).first()
+    if not db_menu:
+        raise HTTPException(status_code=404, detail="Menu not found")
+
+    for action_name, action_route in action_routes.items():
+        db_menu_item = MenuItem(name=action_name, menu_id=db_menu.id, action_route=action_route)
+        db.add(db_menu_item)
+
+    for option_name, option_route in submenu_options.items():
+        db_menu_item = MenuItem(name=option_name, menu_id=db_menu.id, action_route=option_route)
+        db.add(db_menu_item)
+
+    db.commit()
+
+@app.get("/menu/{menu_id}")
+def get_menu(menu_id: int, db: Session = Depends(get_db)):
+    menu = db.query(Menu).get(menu_id)
+    if not menu:
+        raise HTTPException(status_code=404, detail="Menu not found")
+    menu_items = [name for name in action_routes.keys()] 
+    return {"menu": menu, "menu_items": menu_items}
+
+@app.get("/menu/submenu/{menu_id}")
+def get_sub_menu(menu_id: int, db: Session = Depends(get_db)):
+    menu = db.query(Menu).get(menu_id)
+    if not menu:
+        raise HTTPException(status_code=404, detail="Menu not found")
+    submenu_items = list(submenu_options.keys())
+    return {"menu": menu, "submenu_items": submenu_items}
+
+@app.post("/menu/choose/")
+def choose_option(option_name: str):
+    if option_name not in action_routes and option_name not in submenu_options:
+        raise HTTPException(status_code=404, detail="Option not found")
+    
+    if option_name in action_routes:
+        action_route = action_routes[option_name]
+    else:
+        action_route = submenu_options[option_name]
+    return {"message": f"Action '{option_name}' initiated. Route: {action_route}"}
