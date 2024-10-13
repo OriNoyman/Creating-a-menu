@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException
-from sqlalchemy.orm import declarative_base, Session
+from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from pydantic import BaseModel
@@ -22,22 +22,18 @@ def get_db():
         db.close()
 
 class MenuValidation(BaseModel):
-    id: int
     name: str
     parent_menu_id: Optional[int] = None
     
 class MenuItemValidation(BaseModel):
-    id: int
     name: str
     menu_id: int
 
 class MenuOptionValidation(BaseModel):
-    id: int
     menu_id: int
     action_id: Optional[int] = None
 
 class MenuActionValidation(BaseModel):
-    id: int
     action_name: str
     description: Optional[str]
 
@@ -120,7 +116,6 @@ def sign_up_user(user: UserValidation, db: Session = Depends(get_db)):
     
 POST /menu_actions/
 {
-    "id": 1,
     "action_name": "Action",
     "description": "action in the main menu"
 }
@@ -138,7 +133,6 @@ def perform_menu_option(option_id: int, db: Session = Depends(get_db)):
 POST /menu_actions/
 
 {
-    "id": 1,
     "action_name": "Exit",
     "description": "Exit the system"
 }
